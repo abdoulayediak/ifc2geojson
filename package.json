@@ -1,0 +1,38 @@
+{
+  "name": "ifc2geojson",
+  "version": "1.0.0",
+  "description": "Convert IFC (BIM) to GeoJSON (GIS) - Browser and Node.js compatible",
+  "main": "dist/node/ifc2geojson.js",
+  "browser": "dist/browser/ifc2geojson.min.js",
+  "types": "dist/node/ifc2geojson.d.ts",
+  "files": [
+    "dist/",
+    "dist/browser/web-ifc.wasm"
+  ],
+  "scripts": {
+    "build": "tsc && webpack"
+  },
+  "keywords": [
+    "ifc",
+    "geojson",
+    "3d",
+    "converter",
+    "bim",
+    "gis",
+    "geobim"
+  ],
+  "author": "Abdoulaye Diakite",
+  "license": "MPL-2.0",
+  "dependencies": {
+    "@types/geojson": "^7946.0.16",
+    "@types/three": "^0.178.0",
+    "three": "^0.x",
+    "web-ifc": "^0.x"
+  },
+  "devDependencies": {
+    "ts-loader": "^x.x.x",
+    "typescript": "^x.x.x",
+    "webpack": "^5.x.x",
+    "webpack-cli": "^5.x.x"
+  }
+}
