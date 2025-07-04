@@ -34,5 +34,13 @@
     "typescript": "^x.x.x",
     "webpack": "^5.x.x",
     "webpack-cli": "^5.x.x"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/abdoulayediak/ifc2geojson.git"
+  },
+  "bugs": {
+    "url": "https://github.com/abdoulayediak/ifc2geojson/issues"
+  },
+  "homepage": "https://github.com/abdoulayediak/ifc2geojson#readme"
 }
