@@ -65,6 +65,44 @@ console.log(properties);
 */
 ```
 
+## Usage in the Browser
+
+To use this library directly in a browser environment, include the browser bundle (ifc2geojson.min.js) in your HTML and make sure to also host the required .wasm files (web-ifc.wasm, etc.) in the same directory or configure their paths properly. When all required files are properly imported in a browser environment, the API will be accessible via the global window.ifc2geojson object.
+
+**Example**
+```html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+</head>
+<body>
+  <input type="file" id="ifcInput" accept=".ifc" />
+
+  <script src="path/to/ifc2geojson.min.js"></script>
+  <script>
+    document.getElementById("ifcInput").addEventListener("change", async (e) => {
+      const file = e.target.files[0];
+      const arrayBuffer = await file.arrayBuffer();
+      const uint8 = new Uint8Array(arrayBuffer);
+  
+      const { ifc2GeojsonBlob } = window.ifc2geojson;
+  
+      const blob = await ifc2GeojsonBlob(uint8, (msg) => {
+        console.log("Progress:", msg);
+      });
+  
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = file.name.replace(/\.ifc$/i, ".geojson");
+      a.click();
+    });
+  </script>
+
+</body>
+</html>
+```
 
 ## API Reference
 
