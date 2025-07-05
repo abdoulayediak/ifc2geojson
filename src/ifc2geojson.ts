@@ -124,8 +124,8 @@ class GeoJsonExporter {
 
 export async function ifc2Geojson(
     ifcData: Uint8Array,
-    msgCallback: (msg: string) => void = () => { },
-    crs: string = "urn:ogc:def:crs:EPSG::3857"
+    crs: string = "urn:ogc:def:crs:EPSG::3857",
+    msgCallback: (msg: string) => void = () => { }
 ): Promise<object> {
 
     const ifcApi = new WebIFC.IfcAPI();
@@ -172,11 +172,11 @@ export async function ifc2Geojson(
 
 export async function ifc2GeojsonBlob(
     ifcData: Uint8Array,
-    msgCallback: (msg: string) => void = () => { },
-    crs: string = "urn:ogc:def:crs:EPSG::3857"
+    crs: string = "urn:ogc:def:crs:EPSG::3857",
+    msgCallback: (msg: string) => void = () => { }
 ): Promise<Blob> {
 
-    const geojsonWithCRS = await ifc2Geojson(ifcData, msgCallback, crs);
+    const geojsonWithCRS = await ifc2Geojson(ifcData, crs, msgCallback);
     const blob = new Blob([JSON.stringify(geojsonWithCRS)], {
         type: "application/json"
     });

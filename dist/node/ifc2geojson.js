@@ -115,7 +115,7 @@ class GeoJsonExporter {
     }
 }
 export function ifc2Geojson(ifcData_1) {
-    return __awaiter(this, arguments, void 0, function* (ifcData, msgCallback = () => { }, crs = "urn:ogc:def:crs:EPSG::3857") {
+    return __awaiter(this, arguments, void 0, function* (ifcData, crs = "urn:ogc:def:crs:EPSG::3857", msgCallback = () => { }) {
         const ifcApi = new WebIFC.IfcAPI();
         yield ifcApi.Init();
         const modelID = ifcApi.OpenModel(ifcData);
@@ -150,8 +150,8 @@ export function ifc2Geojson(ifcData_1) {
     });
 }
 export function ifc2GeojsonBlob(ifcData_1) {
-    return __awaiter(this, arguments, void 0, function* (ifcData, msgCallback = () => { }, crs = "urn:ogc:def:crs:EPSG::3857") {
-        const geojsonWithCRS = yield ifc2Geojson(ifcData, msgCallback, crs);
+    return __awaiter(this, arguments, void 0, function* (ifcData, crs = "urn:ogc:def:crs:EPSG::3857", msgCallback = () => { }) {
+        const geojsonWithCRS = yield ifc2Geojson(ifcData, crs, msgCallback);
         const blob = new Blob([JSON.stringify(geojsonWithCRS)], {
             type: "application/json"
         });

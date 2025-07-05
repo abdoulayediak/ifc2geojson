@@ -1,0 +1,12 @@
+# Node.js
+node_modules/
+dist/
+*.log
+
+# TypeScript
+*.tsbuildinfo
+
+# Mac / OS / IDEs
+.DS_Store
+*.swp
+.vscode/

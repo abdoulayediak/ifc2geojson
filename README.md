@@ -4,13 +4,6 @@ This project provides tools to convert IFC (Industry Foundation Classes) models 
 
 ---
 
-## License
-
-This source code is licensed under the Mozilla Public License 2.0 (MPL-2.0).  
-See [https://mozilla.org/MPL/2.0/](https://mozilla.org/MPL/2.0/).
-
----
-
 ## Features
 
 - Parses IFC data using [web-ifc](https://github.com/ifcjs/web-ifc).
@@ -39,15 +32,16 @@ import { ifc2Geojson, ifc2GeojsonBlob, getGeoPackagePropertiesFromGeoJSON } from
 ## Converting IFC to GeoJSON (object)
 
 ```typescript
+const crs = "urn:ogc:def:crs:EPSG::3857";
 const ifcData: Uint8Array = /* load your IFC file */;
-const geojson = await ifc2Geojson(ifcData, (msg) => console.log(msg), "urn:ogc:def:crs:EPSG::3857");
+const geojson = await ifc2Geojson(ifcData, crs, (msg) => console.log(msg));
 console.log(geojson);
 ```
 
 ## Converting IFC to GeoJSON Blob (for file download)
 
 ```typescript
-const geojsonBlob = await ifc2GeojsonBlob(ifcData, (msg) => console.log(msg));
+const geojsonBlob = await ifc2GeojsonBlob(ifcData, crs, (msg) => console.log(msg));
 saveAs(geojsonBlob, "model.geojson");  // using file-saver or similar
 ```
 
@@ -106,17 +100,17 @@ To use this library directly in a browser environment, include the browser bundl
 
 ## API Reference
 
-### `ifc2Geojson(ifcData: Uint8Array, msgCallback?: (msg: string) => void, crs?: string): Promise<object>`
+### `ifc2Geojson(ifcData: Uint8Array, crs?: string, msgCallback?: (msg: string) => void): Promise<object>`
 
 Parses the IFC data and returns a GeoJSON `FeatureCollection` object.
 
 - **ifcData**: Raw IFC file data as `Uint8Array`.
-- **msgCallback**: *(Optional)* Callback function to receive progress messages.
 - **crs**: *(Optional)* Coordinate Reference System identifier string. Default is `"urn:ogc:def:crs:EPSG::3857"`.
+- **msgCallback**: *(Optional)* Callback function to receive progress messages.
 
 ---
 
-### `ifc2GeojsonBlob(ifcData: Uint8Array, msgCallback?: (msg: string) => void, crs?: string): Promise<Blob>`
+### `ifc2GeojsonBlob(ifcData: Uint8Array, crs?: string, msgCallback?: (msg: string) => void): Promise<Blob>`
 
 Same as `ifc2Geojson` but returns a `Blob` containing the GeoJSON string. This is suitable for file download in browser contexts.
 
@@ -137,3 +131,10 @@ Inspects the GeoJSON features and returns a list of property names and their map
 - [`web-ifc`](https://github.com/ifcjs/web-ifc) — for IFC parsing
 - [`three.js`](https://threejs.org) — for 3D geometry processing
 - [`three-geojson-exporter`](https://github.com/prolincur/three-geojson-exporter) — for GeoJSON export inspiration
+
+---
+
+## License
+
+This source code is licensed under the Mozilla Public License 2.0 (MPL-2.0).  
+See [https://mozilla.org/MPL/2.0/](https://mozilla.org/MPL/2.0/).
