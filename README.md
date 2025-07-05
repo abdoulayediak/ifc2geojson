@@ -32,7 +32,7 @@ import { ifc2Geojson, ifc2GeojsonBlob, getGeoPackagePropertiesFromGeoJSON } from
 ## Converting IFC to GeoJSON (object)
 
 ```typescript
-const crs = "urn:ogc:def:crs:EPSG::3857";
+const crs = "urn:ogc:def:crs:EPSG::3857"; //OGC-compliant format (more widely supported). "EPSG:3857" would work in most GIS too.
 const ifcData: Uint8Array = /* load your IFC file */;
 const geojson = await ifc2Geojson(ifcData, crs, (msg) => console.log(msg));
 console.log(geojson);
@@ -82,7 +82,8 @@ To use this library directly in a browser environment, include the browser bundl
   
       const { ifc2GeojsonBlob } = window.ifc2geojson;
   
-      const blob = await ifc2GeojsonBlob(uint8, (msg) => {
+      const crs = "EPSG:4327";
+      const blob = await ifc2GeojsonBlob(uint8, crs, (msg) => {
         console.log("Progress:", msg);
       });
   
