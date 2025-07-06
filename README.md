@@ -1,6 +1,6 @@
 # ifc2geojson - IFC to GeoJSON Converter
 
-This project provides tools to convert IFC (Industry Foundation Classes) models into GeoJSON format, suitable for GIS and web mapping applications. It includes a 3D-aware GeoJSON exporter and utilities for generating GeoPackage schema from GeoJSON.
+This project provides tools to convert IFC (Industry Foundation Classes) models into GeoJSON format, suitable for GIS and web mapping applications. It includes a 3D-aware GeoJSON exporter and utilities for generating GeoPackage schema from GeoJSON. See the [`live demo`](https://citygeometrix.com/ifc2gis).
 
 ---
 
@@ -132,6 +132,7 @@ Inspects the GeoJSON features and returns a list of property names and their map
 - [`web-ifc`](https://github.com/ifcjs/web-ifc) — for IFC parsing
 - [`three.js`](https://threejs.org) — for 3D geometry processing
 - [`three-geojson-exporter`](https://github.com/prolincur/three-geojson-exporter) — for GeoJSON export inspiration
+- [`geopackage-js`](https://github.com/ngageoint/geopackage-js) — for the GeoJSON to GeoPackage converter used in the [`demo page`](https://citygeometrix.com/ifc2gis)
 
 ---
 
