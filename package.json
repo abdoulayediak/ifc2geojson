@@ -1,6 +1,6 @@
 {
   "name": "ifc2geojson",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Convert IFC (BIM) to GeoJSON (GIS) - Browser and Node.js compatible",
   "main": "dist/node/ifc2geojson.js",
   "browser": "dist/browser/ifc2geojson.min.js",
