@@ -68,9 +68,8 @@ export class IfcThree {
         console.log(`Uploading took ${ms() - startUploadingTime} ms`);
     }
     extractStringProperties(elem) {
-        var _a;
         const result = {
-            IfcEntity: ((_a = elem === null || elem === void 0 ? void 0 : elem.constructor) === null || _a === void 0 ? void 0 : _a.name) || "Unknown",
+            IfcEntity: this.ifcAPI.GetNameFromTypeCode(elem === null || elem === void 0 ? void 0 : elem.type) || "Unknown",
             color: "",
             opacity: 1
         };
