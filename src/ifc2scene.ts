@@ -87,7 +87,7 @@ export class IfcThree {
 
     private extractStringProperties(elem: any): Record<string, any> {
         const result: Record<string, any> = {
-            IfcEntity: elem?.constructor?.name || "Unknown",
+            IfcEntity: this.ifcAPI.GetNameFromTypeCode(elem?.type) || "Unknown",
             color: "",
             opacity: 1
         };

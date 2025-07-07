@@ -119,7 +119,7 @@ Same as `ifc2Geojson` but returns a `Blob` containing the GeoJSON string. This i
 
 ### `getGeoPackagePropertiesFromGeoJSON(geojson: GeoJSON.FeatureCollection): { name: string; dataType: string }[]`
 
-Inspects the GeoJSON features and returns a list of property names and their mapped GeoPackage data types:
+Inspects the GeoJSON features and returns a list of property names and their mapped GeoPackage data types (useful when converting GeoJSON to GeoPackage):
 
 - `TEXT` for string fields
 - `REAL` for numeric fields
