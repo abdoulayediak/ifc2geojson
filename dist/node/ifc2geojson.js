@@ -114,6 +114,74 @@ class GeoJsonExporter {
         };
     }
 }
+const SI_PREFIXES = {
+    EXA: 1e18, PETA: 1e15, TERA: 1e12, GIGA: 1e9, MEGA: 1e6,
+    KILO: 1e3, HECTO: 1e2, DECA: 1e1, DECI: 1e-1, CENTI: 1e-2,
+    MILLI: 1e-3, MICRO: 1e-6, NANO: 1e-9
+};
+const LENGTH_UNITS = {
+    METRE: 1,
+    FOOT: 0.3048,
+    INCH: 0.0254
+};
+function getUnitScale(ifcApi, modelID) {
+    var _a, _b, _c, _d, _e;
+    try {
+        const projectID = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCPROJECT).get(0);
+        const project = ifcApi.GetLine(modelID, projectID);
+        const units = (_a = ifcApi.GetLine(modelID, project.UnitsInContext.value)) === null || _a === void 0 ? void 0 : _a.Units;
+        for (const unitRef of units) {
+            const unit = ifcApi.GetLine(modelID, unitRef.value);
+            // console.log("Found unit:", unit);
+            if (((_b = unit.UnitType) === null || _b === void 0 ? void 0 : _b.value) === "LENGTHUNIT") {
+                const baseName = ((_c = unit === null || unit === void 0 ? void 0 : unit.Name) === null || _c === void 0 ? void 0 : _c.value) || "METRE";
+                const base = LENGTH_UNITS[baseName];
+                const prefixName = (_d = unit === null || unit === void 0 ? void 0 : unit.Prefix) === null || _d === void 0 ? void 0 : _d.value;
+                const factor = prefixName ? ((_e = SI_PREFIXES[prefixName]) !== null && _e !== void 0 ? _e : 1) : 1;
+                // console.log(`Detected LENGTHUNIT: ${prefixName || ""} ${baseName || ""}`);
+                // console.log(`base=${base}, prefix=${factor}, total=${base * factor}`);
+                return base * factor;
+            }
+        }
+    }
+    catch (err) {
+        console.warn("⚠️ Failed to detect unit scale. Defaulting to 1 (meters).", err);
+        return 1;
+    }
+    console.warn("⚠️ No LENGTHUNIT found. Defaulting to 1 (meters).");
+    return 1;
+}
+function getIfcMapConversionMatrix(ifcApi, modelID) {
+    return __awaiter(this, void 0, void 0, function* () {
+        var _a, _b, _c, _d, _e, _f;
+        const mapConvIds = yield ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCMAPCONVERSION);
+        // console.log("mapConvIds size:", mapConvIds.size());
+        if (mapConvIds.size() === 0)
+            return new THREE.Matrix4();
+        const mapConv = yield ifcApi.GetLine(modelID, mapConvIds.get(0));
+        // console.log("mapConv:", mapConv);
+        if (!mapConv)
+            return new THREE.Matrix4();
+        const eastings = ((_a = mapConv.Eastings) === null || _a === void 0 ? void 0 : _a.value) || 0;
+        const northings = ((_b = mapConv.Northings) === null || _b === void 0 ? void 0 : _b.value) || 0;
+        const orthoHeight = ((_c = mapConv.OrthogonalHeight) === null || _c === void 0 ? void 0 : _c.value) || 0;
+        // console.log("eastings:", eastings, "; northings:", northings);
+        const xAxisX = ((_d = mapConv.XAxisAbscissa) === null || _d === void 0 ? void 0 : _d.value) || 1;
+        const xAxisY = ((_e = mapConv.XAxisOrdinate) === null || _e === void 0 ? void 0 : _e.value) || 0;
+        const scale = ((_f = mapConv.Scale) === null || _f === void 0 ? void 0 : _f.value) || 1;
+        const xAxis = new THREE.Vector3(xAxisX, xAxisY, 0).normalize();
+        const zAxis = new THREE.Vector3(0, 0, 1);
+        const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis);
+        // Get unit scale
+        let unitScale = getUnitScale(ifcApi, modelID);
+        // console.log("unitScale:", unitScale);
+        const matrix = new THREE.Matrix4();
+        matrix.makeBasis(xAxis, yAxis, zAxis);
+        matrix.setPosition(new THREE.Vector3(eastings * unitScale, northings * unitScale, orthoHeight * unitScale));
+        matrix.scale(new THREE.Vector3(scale, scale, scale));
+        return matrix;
+    });
+}
 export function ifc2Geojson(ifcData_1) {
     return __awaiter(this, arguments, void 0, function* (ifcData, crs = "urn:ogc:def:crs:EPSG::3857", msgCallback = () => { }) {
         const ifcApi = new WebIFC.IfcAPI();
@@ -123,17 +191,16 @@ export function ifc2Geojson(ifcData_1) {
         const scene = new THREE.Scene();
         const model = new IfcThree(ifcApi);
         model.LoadAllGeometry(scene, modelID);
+        // IfcMapConversion related transformation
+        const mapMatrix = yield getIfcMapConversionMatrix(ifcApi, modelID);
+        // flip Y <-> Z (in GIS, Z is up)
+        const flipMatrix = new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1);
+        const finalMatrix = new THREE.Matrix4().multiplyMatrices(mapMatrix, flipMatrix);
         scene.traverse((child) => {
             if (child instanceof THREE.Mesh && child.geometry instanceof THREE.BufferGeometry) {
-                const posAttr = child.geometry.attributes.position;
-                for (let i = 0; i < posAttr.count; i++) {
-                    const x = posAttr.getX(i);
-                    const y = posAttr.getY(i);
-                    const z = posAttr.getZ(i);
-                    posAttr.setXYZ(i, x, -z, y); // flip Y <-> Z
-                }
-                posAttr.needsUpdate = true;
-                child.geometry.computeVertexNormals();
+                child.updateMatrix();
+                child.geometry.applyMatrix4(finalMatrix);
+                // child.geometry.computeVertexNormals();
             }
         });
         msgCallback("Converting to GeoJSON...");

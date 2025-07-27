@@ -71,7 +71,7 @@ export class IfcThree {
             
         });
 
-        console.log("Loading " + geometries.length + " geometries");
+        // console.log("Loading " + geometries.length + " geometries");
 
         geometries.forEach((geom, idx)=>{
             let mat = new THREE.MeshPhongMaterial({ side: THREE.DoubleSide });
@@ -82,7 +82,7 @@ export class IfcThree {
         });
 
 
-        console.log(`Uploading took ${ms() - startUploadingTime} ms`);
+        // console.log(`Uploading took ${ms() - startUploadingTime} ms`);
     } 
 
     private extractStringProperties(elem: any): Record<string, any> {

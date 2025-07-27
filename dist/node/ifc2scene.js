@@ -57,7 +57,7 @@ export class IfcThree {
                 geometriesProps.push(structuredClone(elemProps));
             }
         });
-        console.log("Loading " + geometries.length + " geometries");
+        // console.log("Loading " + geometries.length + " geometries");
         geometries.forEach((geom, idx) => {
             let mat = new THREE.MeshPhongMaterial({ side: THREE.DoubleSide });
             mat.vertexColors = true;
@@ -65,7 +65,7 @@ export class IfcThree {
             aMesh.userData = geometriesProps[idx];
             scene.add(aMesh);
         });
-        console.log(`Uploading took ${ms() - startUploadingTime} ms`);
+        // console.log(`Uploading took ${ms() - startUploadingTime} ms`);
     }
     extractStringProperties(elem) {
         const result = {
