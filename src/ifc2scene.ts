@@ -8,7 +8,17 @@
 */
 
 import * as THREE from "three";
-import { IfcAPI, ms, PlacedGeometry, Color, FlatMesh } from "web-ifc";
+import { IfcAPI, ms, PlacedGeometry, Color, FlatMesh, IfcType } from "web-ifc";
+
+
+const spatialElemsList = [
+    "IfcExternalSpatialElement",
+    "IfcOpeningElement",
+    "IfcOpeningStandardCase",
+    "IfcSpace",
+    "IfcSpatialZone"
+];
+
 
 export class IfcThree {
     private ifcAPI: IfcAPI;
@@ -25,55 +35,73 @@ export class IfcThree {
      * @scene Threejs Scene object
      * @modelID Model handle retrieved by OpenModel, model must not be closed
     */
-    public LoadAllGeometry(scene: THREE.Scene, modelID: number) {
-
-        const startUploadingTime = ms();
+    public LoadAllGeometry(
+        scene: THREE.Scene,
+        modelID: number,
+        toFilter: string[] = []) {
 
         let geometries: THREE.BufferGeometry<THREE.NormalBufferAttributes>[] = [];
         let geometriesProps: any[] = [];
+        // const startUploadingTime = ms();
 
-        this.ifcAPI.StreamAllMeshes(modelID, (mesh: FlatMesh) => {
+        let typesToLoad: number[] = [];
+
+        // console.log( "toFilter", toFilter);
+        // Filter elements if provided
+        if (toFilter.length > 0)
+            typesToLoad.push(...this.getFilteredIfcTypes(modelID, toFilter));
+        else {
+            // Otherwise, select only children of IfcProduct from the input
+            // Build a map of type name -> type ID
+            const allTypes: IfcType[] = this.ifcAPI.GetAllTypesOfModel(modelID);
+            for (let i = 0; i < allTypes.length; i++) {
+                if (this.ifcAPI.IsIfcElement(allTypes[i].typeID)) {
+                    typesToLoad.push(allTypes[i].typeID);
+                }
+            }
+        }
+
+        this.ifcAPI.StreamAllMeshesWithTypes(modelID, typesToLoad, (mesh: FlatMesh) => {
             // Each IFC element can have several geometries with different materials
             const placedGeometries = mesh.geometries;
-            
+
             // Collect and store the IFC element's properties
             let elem = this.ifcAPI.GetLine(modelID, mesh.expressID);
             let elemProps = this.extractStringProperties(elem);
-            
+
             for (let i = 0; i < placedGeometries.size(); i++) {
                 const placedGeometry = placedGeometries.get(i);
                 let placedMesh = this.getPlacedGeometry(modelID, placedGeometry);
                 let geom = placedMesh.geometry.applyMatrix4(placedMesh.matrix);
-                
+
                 let geomCol = placedGeometry.color;
                 // Provide a color to non-transparent components without one:
                 // Blue for furniture and grey for the rest (walls, etc).
-                if ( geomCol.x == 0 && geomCol.y == 0 && geomCol.z == 0 && geomCol.w == 1){
-                    if (elemProps.IfcEntity.includes("IfcFurni")){
+                if (geomCol.x == 0 && geomCol.y == 0 && geomCol.z == 0 && geomCol.w == 1) {
+                    if (elemProps.IfcEntity.includes("IfcFurni")) {
                         geomCol.x = 0.1;
                         geomCol.y = 0.3;
                         geomCol.z = 0.7;
                     }
-                    else{
+                    else {
                         geomCol.x = 0.7;
                         geomCol.y = 0.7;
                         geomCol.z = 0.7;
                     }
                 }
-                
-                const col = new THREE.Color().setRGB( geomCol.x, geomCol.y, geomCol.z);
+
+                const col = new THREE.Color().setRGB(geomCol.x, geomCol.y, geomCol.z);
                 elemProps.color = `#${col.getHexString()}`;
-                elemProps.opacity = placedGeometry.color.w * 100; //opacity in percentage
-                
+                //opacity in percentage (default to 25% for spatial elements)
+                elemProps.opacity = spatialElemsList.includes(elemProps.IfcEntity) ? 25 : placedGeometry.color.w * 100;
                 geometries.push(geom);
                 geometriesProps.push(structuredClone(elemProps));
             }
-            
         });
 
         // console.log("Loading " + geometries.length + " geometries");
 
-        geometries.forEach((geom, idx)=>{
+        geometries.forEach((geom, idx) => {
             let mat = new THREE.MeshPhongMaterial({ side: THREE.DoubleSide });
             mat.vertexColors = true;
             const aMesh = new THREE.Mesh(geom, mat);
@@ -81,9 +109,34 @@ export class IfcThree {
             scene.add(aMesh);
         });
 
-
         // console.log(`Uploading took ${ms() - startUploadingTime} ms`);
-    } 
+    }
+
+
+    private getFilteredIfcTypes(
+        modelID: number,
+        classList: string[],
+    ): number[] {
+        const typeMap = new Map<string, number>();
+
+        // Build a map of type name -> type ID
+        const allTypes: IfcType[] = this.ifcAPI.GetAllTypesOfModel(modelID);
+        for (let i = 0; i < allTypes.length; i++) {
+            if (this.ifcAPI.IsIfcElement(allTypes[i].typeID)) {
+                typeMap.set(allTypes[i].typeName.toUpperCase(), allTypes[i].typeID);
+            }
+        }
+
+        const filtered = [];
+        const filterSet = new Set(classList.map(c => c.toUpperCase()));
+        for (const [typeName, typeID] of typeMap.entries()) {
+            if (filterSet.has(typeName))
+                filtered.push(typeID);
+        }
+
+        return filtered;
+    }
+
 
     private extractStringProperties(elem: any): Record<string, any> {
         const result: Record<string, any> = {
@@ -93,7 +146,7 @@ export class IfcThree {
         };
 
         for (const [key, val] of Object.entries(elem)) {
-            if ( val && typeof val === "object" && "value" in val && typeof val.value === "string"){
+            if (val && typeof val === "object" && "value" in val && typeof val.value === "string") {
                 result[key] = val.value;
             }
         }

@@ -20,9 +20,10 @@ import { IfcThree } from './ifc2scene';
 // Adapted from https://github.com/prolincur/three-geojson-exporter for 3D support
 class GeoJsonExporter {
     constructor() {
-        this.transformCallback = (p) => [p.x, p.y, p.z];
         this.projection = "EPSG:3857";
         this.precision = 8;
+        this.georefOffset = new THREE.Vector3(0, 0, 0);
+        this.transformCallback = (p) => [p.x, p.y, p.z];
     }
     setProjection(p) {
         this.projection = p;
@@ -30,6 +31,10 @@ class GeoJsonExporter {
     }
     setPrecision(p) {
         this.precision = p;
+        return this;
+    }
+    setGeorefOffset(offset) {
+        this.georefOffset.copy(offset);
         return this;
     }
     setTransformCallback(fn) {
@@ -43,12 +48,11 @@ class GeoJsonExporter {
             return null;
         const exporter = this;
         function toCoords(v) {
-            const [x, y, z] = exporter.transformCallback(v);
-            return [
-                parseFloat(x.toFixed(exporter.precision)),
-                parseFloat(y.toFixed(exporter.precision)),
-                parseFloat(z.toFixed(exporter.precision))
-            ];
+            // Add georef offset to local vertex
+            const geoV = new THREE.Vector3().copy(v).add(exporter.georefOffset);
+            const [x, y, z] = exporter.transformCallback(geoV);
+            // 
+            return [x, y, z];
         }
         function extractMesh(obj) {
             const geometry = obj.geometry;
@@ -56,25 +60,24 @@ class GeoJsonExporter {
             const index = geometry.index;
             if (!pos)
                 return [];
-            obj.updateMatrix();
-            const matrix = obj.matrixWorld.clone();
+            obj.updateMatrixWorld();
             const polygons = [];
             if (index) {
                 for (let i = 0; i < index.count; i += 3) {
                     const a = index.getX(i);
                     const b = index.getX(i + 1);
                     const c = index.getX(i + 2);
-                    const va = toCoords(new THREE.Vector3().fromBufferAttribute(pos, a).applyMatrix4(matrix));
-                    const vb = toCoords(new THREE.Vector3().fromBufferAttribute(pos, b).applyMatrix4(matrix));
-                    const vc = toCoords(new THREE.Vector3().fromBufferAttribute(pos, c).applyMatrix4(matrix));
+                    const va = toCoords(new THREE.Vector3().fromBufferAttribute(pos, a).applyMatrix4(obj.matrixWorld));
+                    const vb = toCoords(new THREE.Vector3().fromBufferAttribute(pos, b).applyMatrix4(obj.matrixWorld));
+                    const vc = toCoords(new THREE.Vector3().fromBufferAttribute(pos, c).applyMatrix4(obj.matrixWorld));
                     polygons.push([va, vb, vc, va]);
                 }
             }
             else {
                 for (let i = 0; i < pos.count; i += 3) {
-                    const va = toCoords(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(matrix));
-                    const vb = toCoords(new THREE.Vector3().fromBufferAttribute(pos, i + 1).applyMatrix4(matrix));
-                    const vc = toCoords(new THREE.Vector3().fromBufferAttribute(pos, i + 2).applyMatrix4(matrix));
+                    const va = toCoords(new THREE.Vector3().fromBufferAttribute(pos, i).applyMatrix4(obj.matrixWorld));
+                    const vb = toCoords(new THREE.Vector3().fromBufferAttribute(pos, i + 1).applyMatrix4(obj.matrixWorld));
+                    const vc = toCoords(new THREE.Vector3().fromBufferAttribute(pos, i + 2).applyMatrix4(obj.matrixWorld));
                     polygons.push([va, vb, vc, va]);
                 }
             }
@@ -96,17 +99,15 @@ class GeoJsonExporter {
                 features.push(...extractMesh(obj));
             }
             else if (obj instanceof THREE.Group || obj instanceof THREE.Scene || obj instanceof THREE.Object3D) {
-                obj.updateMatrix();
+                obj.updateMatrixWorld();
                 for (const child of obj.children) {
-                    const childFeatures = recurse(child);
-                    if (childFeatures)
-                        features.push(...childFeatures);
+                    features.push(...recurse(child));
                 }
             }
             return features;
         }
         const features = recurse(root);
-        if (!features || !features.length)
+        if (!features.length)
             return null;
         return {
             type: "FeatureCollection",
@@ -120,24 +121,28 @@ const SI_PREFIXES = {
     MILLI: 1e-3, MICRO: 1e-6, NANO: 1e-9
 };
 const LENGTH_UNITS = {
-    METRE: 1,
+    METRE: 1.0,
     FOOT: 0.3048,
     INCH: 0.0254
 };
-function getUnitScale(ifcApi, modelID) {
+/**
+ * Computes the conversion factor for length units defined in the IFC model.
+ * Defaults to 1 (meter) if no unit or unknown unit is found.
+ */
+function getUnitScale(ifcAPI, modelID) {
     var _a, _b, _c, _d, _e;
     try {
-        const projectID = ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCPROJECT).get(0);
-        const project = ifcApi.GetLine(modelID, projectID);
-        const units = (_a = ifcApi.GetLine(modelID, project.UnitsInContext.value)) === null || _a === void 0 ? void 0 : _a.Units;
+        const projectID = ifcAPI.GetLineIDsWithType(modelID, WebIFC.IFCPROJECT).get(0);
+        const project = ifcAPI.GetLine(modelID, projectID);
+        const units = (_a = ifcAPI.GetLine(modelID, project.UnitsInContext.value)) === null || _a === void 0 ? void 0 : _a.Units;
         for (const unitRef of units) {
-            const unit = ifcApi.GetLine(modelID, unitRef.value);
+            const unit = ifcAPI.GetLine(modelID, unitRef.value);
             // console.log("Found unit:", unit);
             if (((_b = unit.UnitType) === null || _b === void 0 ? void 0 : _b.value) === "LENGTHUNIT") {
                 const baseName = ((_c = unit === null || unit === void 0 ? void 0 : unit.Name) === null || _c === void 0 ? void 0 : _c.value) || "METRE";
                 const base = LENGTH_UNITS[baseName];
                 const prefixName = (_d = unit === null || unit === void 0 ? void 0 : unit.Prefix) === null || _d === void 0 ? void 0 : _d.value;
-                const factor = prefixName ? ((_e = SI_PREFIXES[prefixName]) !== null && _e !== void 0 ? _e : 1) : 1;
+                const factor = prefixName ? ((_e = SI_PREFIXES[prefixName]) !== null && _e !== void 0 ? _e : 1) : 1.0;
                 // console.log(`Detected LENGTHUNIT: ${prefixName || ""} ${baseName || ""}`);
                 // console.log(`base=${base}, prefix=${factor}, total=${base * factor}`);
                 return base * factor;
@@ -151,14 +156,46 @@ function getUnitScale(ifcApi, modelID) {
     console.warn("⚠️ No LENGTHUNIT found. Defaulting to 1 (meters).");
     return 1;
 }
-function getIfcMapConversionMatrix(ifcApi, modelID) {
+export function getElemsWithGeom(ifcData) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const elemsWithGeom = [];
+        const ifcAPI = new WebIFC.IfcAPI();
+        yield ifcAPI.Init();
+        const modelID = ifcAPI.OpenModel(ifcData);
+        // Get all types available in the model
+        const allTypes = ifcAPI.GetAllTypesOfModel(modelID);
+        for (let i = 0; i < allTypes.length; i++) {
+            const type = allTypes[i];
+            // Only consider IFC elements that can have geometry
+            if (ifcAPI.IsIfcElement(type.typeID)) {
+                // Get all items of this type
+                const items = ifcAPI.GetLineIDsWithType(modelID, type.typeID);
+                for (let j = 0; j < items.size(); j++) {
+                    const lineID = items.get(j);
+                    const line = ifcAPI.GetLine(modelID, lineID);
+                    if (line.Representation) {
+                        elemsWithGeom.push(type.typeName);
+                        break;
+                    }
+                }
+            }
+        }
+        ifcAPI.CloseModel(modelID);
+        return elemsWithGeom;
+    });
+}
+/**
+ * Computes a transformation matrix from the IFC IfcMapConversion entity,
+ * incorporating translation, orientation, scaling, and unit conversion.
+ */
+function getIfcMapConversionMatrix(ifcAPI, modelID) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, _b, _c, _d, _e, _f;
-        const mapConvIds = yield ifcApi.GetLineIDsWithType(modelID, WebIFC.IFCMAPCONVERSION);
+        const mapConvIds = yield ifcAPI.GetLineIDsWithType(modelID, WebIFC.IFCMAPCONVERSION);
         // console.log("mapConvIds size:", mapConvIds.size());
         if (mapConvIds.size() === 0)
             return new THREE.Matrix4();
-        const mapConv = yield ifcApi.GetLine(modelID, mapConvIds.get(0));
+        const mapConv = yield ifcAPI.GetLine(modelID, mapConvIds.get(0));
         // console.log("mapConv:", mapConv);
         if (!mapConv)
             return new THREE.Matrix4();
@@ -173,38 +210,84 @@ function getIfcMapConversionMatrix(ifcApi, modelID) {
         const zAxis = new THREE.Vector3(0, 0, 1);
         const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis);
         // Get unit scale
-        let unitScale = getUnitScale(ifcApi, modelID);
+        let unitScale = getUnitScale(ifcAPI, modelID);
         // console.log("unitScale:", unitScale);
         const matrix = new THREE.Matrix4();
         matrix.makeBasis(xAxis, yAxis, zAxis);
         matrix.setPosition(new THREE.Vector3(eastings * unitScale, northings * unitScale, orthoHeight * unitScale));
         matrix.scale(new THREE.Vector3(scale, scale, scale));
+        // console.log("transfoMatrix:", matrix);
         return matrix;
     });
 }
-export function ifc2Geojson(ifcData_1) {
-    return __awaiter(this, arguments, void 0, function* (ifcData, crs = "urn:ogc:def:crs:EPSG::3857", msgCallback = () => { }) {
-        const ifcApi = new WebIFC.IfcAPI();
-        yield ifcApi.Init();
-        const modelID = ifcApi.OpenModel(ifcData);
-        msgCallback("Loading geometries...");
-        const scene = new THREE.Scene();
-        const model = new IfcThree(ifcApi);
-        model.LoadAllGeometry(scene, modelID);
-        // IfcMapConversion related transformation
-        const mapMatrix = yield getIfcMapConversionMatrix(ifcApi, modelID);
-        // flip Y <-> Z (in GIS, Z is up)
+// Flips the Y and Z coordinates (because Y-up is default for THREE)
+// And apply any transformation from IfcMapConversion (from IFC4)
+// While trying to preserve the coordinate precision as much as possible
+// by using Float64Array and applying transformation at export with georefOffset
+function transformScene(ifcAPI, modelID, scene) {
+    return __awaiter(this, void 0, void 0, function* () {
+        // Step 1: build map conversion matrix (from IFC georef info)
+        const mapMatrix = yield getIfcMapConversionMatrix(ifcAPI, modelID);
+        // Step 2: Y-Z flip (your intention)
         const flipMatrix = new THREE.Matrix4().set(1, 0, 0, 0, 0, 0, -1, 0, 0, 1, 0, 0, 0, 0, 0, 1);
-        const finalMatrix = new THREE.Matrix4().multiplyMatrices(mapMatrix, flipMatrix);
+        // Step 3: combine (flip after map conversion)
+        const finalMatrix = new THREE.Matrix4()
+            .multiplyMatrices(mapMatrix, flipMatrix);
+        // Step 4: extract large translation part (eastings, northings, orthoHeight)
+        const translation = new THREE.Vector3();
+        finalMatrix.decompose(translation, new THREE.Quaternion(), new THREE.Vector3());
+        // Store this separately as "georef offset"
+        const georefOffset = translation.clone();
+        // Step 5: modify finalMatrix to remove large translation
+        const localMatrix = finalMatrix.clone();
+        localMatrix.setPosition(new THREE.Vector3(0, 0, 0));
+        // Step 6: convert all BufferGeometry positions to Float64Array
         scene.traverse((child) => {
-            if (child instanceof THREE.Mesh && child.geometry instanceof THREE.BufferGeometry) {
-                child.updateMatrix();
-                child.geometry.applyMatrix4(finalMatrix);
-                // child.geometry.computeVertexNormals();
+            var _a;
+            if (child.isMesh && ((_a = child.geometry) === null || _a === void 0 ? void 0 : _a.attributes.position)) {
+                const oldPos = child.geometry.attributes.position;
+                const newPos = new Float64Array(oldPos.count * 3);
+                for (let i = 0; i < oldPos.count; i++) {
+                    newPos[i * 3] = oldPos.getX(i);
+                    newPos[i * 3 + 1] = oldPos.getY(i);
+                    newPos[i * 3 + 2] = oldPos.getZ(i);
+                }
+                child.geometry.setAttribute('position', new THREE.BufferAttribute(newPos, 3));
             }
         });
+        // Step 7: apply local transform to objects (rotation, scale)
+        scene.traverse((child) => {
+            if (child.isMesh) {
+                child.applyMatrix4(localMatrix);
+            }
+        });
+        // Return both the transformed scene + georef offset
+        return { scene, georefOffset };
+    });
+}
+/**
+ * Converts an IFC model (Uint8Array) into a GeoJSON FeatureCollection object.
+ *
+ * @param ifcData - The raw IFC file content as a Uint8Array.
+ * @param crs - Optional coordinate reference system string in URN format.
+ *              Default: "urn:ogc:def:crs:EPSG::3857".
+ * @param msgCallback - Optional function to receive progress messages (e.g., for UI feedback).
+ *
+ * @returns A Promise resolving to a GeoJSON FeatureCollection object with geometries and metadata.
+ */
+export function ifc2Geojson(ifcData_1) {
+    return __awaiter(this, arguments, void 0, function* (ifcData, crs = "urn:ogc:def:crs:EPSG::3857", msgCallback = () => { }) {
+        const ifcAPI = new WebIFC.IfcAPI();
+        yield ifcAPI.Init();
+        const modelID = ifcAPI.OpenModel(ifcData);
+        msgCallback("Loading geometries...");
+        const localScene = new THREE.Scene();
+        const model = new IfcThree(ifcAPI);
+        model.LoadAllGeometry(localScene, modelID);
+        // Return both the transformed scene + georef offset
+        const { scene, georefOffset } = yield transformScene(ifcAPI, modelID, localScene);
         msgCallback("Converting to GeoJSON...");
-        const exporter = new GeoJsonExporter();
+        const exporter = new GeoJsonExporter().setGeorefOffset(georefOffset);
         const geojson = exporter.parse(scene);
         const geojsonWithCRS = Object.assign(Object.assign({}, geojson), { crs: {
                 type: "name",
@@ -212,10 +295,57 @@ export function ifc2Geojson(ifcData_1) {
                     name: crs
                 }
             } });
-        ifcApi.CloseModel(modelID);
+        ifcAPI.CloseModel(modelID);
         return geojsonWithCRS;
     });
 }
+/**
+ * Converts an IFC model (Uint8Array) into a filtered GeoJSON FeatureCollection.
+ * Only includes or excludes geometry based on specified IFC class names.
+ *
+ * @param ifcData - The raw IFC file content as a Uint8Array.
+ * @param crs - Optional CRS string in URN format. Default: "urn:ogc:def:crs:EPSG::3857".
+ * @param toFilter - An object with:
+ *                   - mode: "include" or "exclude"
+ *                   - classList: array of IFC class names (e.g., ["IfcWall", "IfcSlab"])
+ * @param msgCallback - Optional progress callback function.
+ *
+ * @returns A Promise resolving to a filtered GeoJSON FeatureCollection.
+ */
+export function ifc2GeojsonWithFilter(ifcData_1) {
+    return __awaiter(this, arguments, void 0, function* (ifcData, crs = "urn:ogc:def:crs:EPSG::3857", toFilter = [], msgCallback = () => { }) {
+        const ifcAPI = new WebIFC.IfcAPI();
+        yield ifcAPI.Init();
+        const modelID = ifcAPI.OpenModel(ifcData);
+        msgCallback("Loading geometries...");
+        const localScene = new THREE.Scene();
+        const model = new IfcThree(ifcAPI);
+        model.LoadAllGeometry(localScene, modelID, toFilter);
+        // Return both the transformed scene + georef offset
+        const { scene, georefOffset } = yield transformScene(ifcAPI, modelID, localScene);
+        msgCallback("Converting to GeoJSON...");
+        const exporter = new GeoJsonExporter().setGeorefOffset(georefOffset);
+        const geojson = exporter.parse(scene);
+        const geojsonWithCRS = Object.assign(Object.assign({}, geojson), { crs: {
+                type: "name",
+                properties: {
+                    name: crs
+                }
+            } });
+        ifcAPI.CloseModel(modelID);
+        return geojsonWithCRS;
+    });
+}
+/**
+ * Like `ifc2Geojson`, but returns the result as a Blob for downloading
+ * or streaming in browser environments.
+ *
+ * @param ifcData - IFC model data as Uint8Array.
+ * @param crs - Optional CRS string in URN format.
+ * @param msgCallback - Optional callback for progress updates.
+ *
+ * @returns A Promise resolving to a Blob containing the GeoJSON string.
+ */
 export function ifc2GeojsonBlob(ifcData_1) {
     return __awaiter(this, arguments, void 0, function* (ifcData, crs = "urn:ogc:def:crs:EPSG::3857", msgCallback = () => { }) {
         const geojsonWithCRS = yield ifc2Geojson(ifcData, crs, msgCallback);
@@ -225,6 +355,35 @@ export function ifc2GeojsonBlob(ifcData_1) {
         return blob;
     });
 }
+/**
+ * Like `ifc2GeojsonWithFilter`, but returns the result as a Blob.
+ * Useful when you want to filter certain IFC classes and export
+ * the result for download or upload.
+ *
+ * @param ifcData - IFC model data as Uint8Array.
+ * @param crs - Optional CRS string in URN format.
+ * @param toFilter - Filtering config: { mode: "include" | "exclude", classList: string[] }
+ * @param msgCallback - Optional callback for progress updates.
+ *
+ * @returns A Promise resolving to a Blob of the filtered GeoJSON output.
+ */
+export function ifc2GeojsonBlobWithFilter(ifcData_1) {
+    return __awaiter(this, arguments, void 0, function* (ifcData, crs = "urn:ogc:def:crs:EPSG::3857", toFilter = [], msgCallback = () => { }) {
+        const geojsonWithCRS = yield ifc2GeojsonWithFilter(ifcData, crs, toFilter, msgCallback);
+        const blob = new Blob([JSON.stringify(geojsonWithCRS)], {
+            type: "application/json"
+        });
+        return blob;
+    });
+}
+/**
+ * Analyzes a GeoJSON FeatureCollection and produces an array of
+ * property names with their corresponding GeoPackage-compatible data types.
+ *
+ * @param geojson - A valid GeoJSON FeatureCollection object.
+ *
+ * @returns An array of objects with `name` and `dataType` (e.g., TEXT, REAL).
+ */
 export function getGeoPackagePropertiesFromGeoJSON(geojson) {
     const typeMap = {
         string: "TEXT",
