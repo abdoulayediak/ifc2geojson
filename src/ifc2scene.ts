@@ -47,11 +47,9 @@ export class IfcThree {
         let typesToLoad: number[] = [];
 
         // console.log( "toFilter", toFilter);
-        // Filter elements if provided
         if (toFilter.length > 0)
             typesToLoad.push(...this.getFilteredIfcTypes(modelID, toFilter));
         else {
-            // Otherwise, select only children of IfcProduct from the input
             // Build a map of type name -> type ID
             const allTypes: IfcType[] = this.ifcAPI.GetAllTypesOfModel(modelID);
             for (let i = 0; i < allTypes.length; i++) {
@@ -62,41 +60,7 @@ export class IfcThree {
         }
 
         this.ifcAPI.StreamAllMeshesWithTypes(modelID, typesToLoad, (mesh: FlatMesh) => {
-            // Each IFC element can have several geometries with different materials
-            const placedGeometries = mesh.geometries;
-
-            // Collect and store the IFC element's properties
-            let elem = this.ifcAPI.GetLine(modelID, mesh.expressID);
-            let elemProps = this.extractStringProperties(elem);
-
-            for (let i = 0; i < placedGeometries.size(); i++) {
-                const placedGeometry = placedGeometries.get(i);
-                let placedMesh = this.getPlacedGeometry(modelID, placedGeometry);
-                let geom = placedMesh.geometry.applyMatrix4(placedMesh.matrix);
-
-                let geomCol = placedGeometry.color;
-                // Provide a color to non-transparent components without one:
-                // Blue for furniture and grey for the rest (walls, etc).
-                if (geomCol.x == 0 && geomCol.y == 0 && geomCol.z == 0 && geomCol.w == 1) {
-                    if (elemProps.IfcEntity.includes("IfcFurni")) {
-                        geomCol.x = 0.1;
-                        geomCol.y = 0.3;
-                        geomCol.z = 0.7;
-                    }
-                    else {
-                        geomCol.x = 0.7;
-                        geomCol.y = 0.7;
-                        geomCol.z = 0.7;
-                    }
-                }
-
-                const col = new THREE.Color().setRGB(geomCol.x, geomCol.y, geomCol.z);
-                elemProps.color = `#${col.getHexString()}`;
-                //opacity in percentage (default to 25% for spatial elements)
-                elemProps.opacity = spatialElemsList.includes(elemProps.IfcEntity) ? 25 : placedGeometry.color.w * 100;
-                geometries.push(geom);
-                geometriesProps.push(structuredClone(elemProps));
-            }
+            this.processMeshGeom(modelID, mesh, geometries, geometriesProps);
         });
 
         // console.log("Loading " + geometries.length + " geometries");
@@ -108,10 +72,78 @@ export class IfcThree {
             aMesh.userData = geometriesProps[idx];
             scene.add(aMesh);
         });
-
         // console.log(`Uploading took ${ms() - startUploadingTime} ms`);
     }
 
+    /**
+     * Loads all geometry for the model with id "modelID" into the supplied scene
+     * @scene Threejs Scene object
+     * @modelID Model handle retrieved by OpenModel, model must not be closed
+    */
+    public LoadSelectedGeometry(
+        scene: THREE.Scene,
+        modelID: number,
+        selectedIDs: number[] = []) {
+
+        let geometries: THREE.BufferGeometry<THREE.NormalBufferAttributes>[] = [];
+        let geometriesProps: any[] = [];
+        // const startUploadingTime = ms();
+
+        this.ifcAPI.StreamMeshes(modelID, selectedIDs, (mesh: FlatMesh) => {
+            this.processMeshGeom(modelID, mesh, geometries, geometriesProps);
+        });
+
+        // console.log("Loading " + geometries.length + " geometries");
+
+        geometries.forEach((geom, idx) => {
+            let mat = new THREE.MeshPhongMaterial({ side: THREE.DoubleSide });
+            mat.vertexColors = true;
+            const aMesh = new THREE.Mesh(geom, mat);
+            aMesh.userData = geometriesProps[idx];
+            scene.add(aMesh);
+        });
+        // console.log(`Uploading took ${ms() - startUploadingTime} ms`);
+    }
+
+
+    private processMeshGeom(modelID: number, mesh: FlatMesh, 
+        geometries: THREE.BufferGeometry<THREE.NormalBufferAttributes>[], geometriesProps: any[]){
+        // Each IFC element can have several geometries with different materials
+        const placedGeometries = mesh.geometries;
+
+        // Collect and store the IFC element's properties
+        let elem = this.ifcAPI.GetLine(modelID, mesh.expressID);
+        let elemProps = this.extractStringProperties(elem);
+
+        for (let i = 0; i < placedGeometries.size(); i++) {
+            const placedGeometry = placedGeometries.get(i);
+            let placedMesh = this.getPlacedGeometry(modelID, placedGeometry);
+            let geom = placedMesh.geometry.applyMatrix4(placedMesh.matrix);
+
+            let geomCol = placedGeometry.color;
+            // Provide a color to non-transparent components without one:
+            // Blue for furniture and grey for the rest (walls, etc).
+            if (geomCol.x == 0 && geomCol.y == 0 && geomCol.z == 0 && geomCol.w == 1) {
+                if (elemProps.IfcEntity.includes("IfcFurni")) {
+                    geomCol.x = 0.1;
+                    geomCol.y = 0.3;
+                    geomCol.z = 0.7;
+                }
+                else {
+                    geomCol.x = 0.7;
+                    geomCol.y = 0.7;
+                    geomCol.z = 0.7;
+                }
+            }
+
+            const col = new THREE.Color().setRGB(geomCol.x, geomCol.y, geomCol.z);
+            elemProps.color = `#${col.getHexString()}`;
+            //opacity in percentage (default to 25% for spatial elements)
+            elemProps.opacity = spatialElemsList.includes(elemProps.IfcEntity) ? 25 : placedGeometry.color.w * 100;
+            geometries.push(geom);
+            geometriesProps.push(structuredClone(elemProps));
+        }
+    }
 
     private getFilteredIfcTypes(
         modelID: number,

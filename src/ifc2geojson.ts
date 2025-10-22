@@ -216,43 +216,45 @@ export async function getElemsWithGeom(
  * Computes a transformation matrix from the IFC IfcMapConversion entity,
  * incorporating translation, orientation, scaling, and unit conversion.
  */
-async function getIfcMapConversionMatrix(ifcAPI: WebIFC.IfcAPI, modelID: number): 
-Promise<THREE.Matrix4> {
+async function getIfcMapConversionMatrix(
+  ifcAPI: WebIFC.IfcAPI,
+  modelID: number
+): Promise<THREE.Matrix4> {
+  const resMatrix = new THREE.Matrix4();
   const mapConvIds = await ifcAPI.GetLineIDsWithType(modelID, WebIFC.IFCMAPCONVERSION);
-  // console.log("mapConvIds size:", mapConvIds.size());
-  if (mapConvIds.size() === 0) return new THREE.Matrix4();
 
+  // Fallback: no IfcMapConversion → scale only from UnitsInContext (to meters)
+  if (mapConvIds.size() === 0) {
+    const s = getUnitScale(ifcAPI, modelID); // e.g. mm→0.001, dm→0.1, m→1
+    return resMatrix.makeScale(s, s, s);
+  }
+
+  // IfcMapConversion present → use ONLY its rotation/scale/translation (map units)
   const mapConv = await ifcAPI.GetLine(modelID, mapConvIds.get(0));
-  // console.log("mapConv:", mapConv);
-  if (!mapConv) return new THREE.Matrix4();
+  if (!mapConv) {
+    const s = getUnitScale(ifcAPI, modelID);
+    return resMatrix.makeScale(s, s, s);
+  }
 
-  const eastings = mapConv.Eastings?.value || 0;
-  const northings = mapConv.Northings?.value || 0;
-  const orthoHeight = mapConv.OrthogonalHeight?.value || 0;
+  const east  = mapConv.Eastings?.value ?? 0;
+  const north = mapConv.Northings?.value ?? 0;
+  const height= mapConv.OrthogonalHeight?.value ?? 0;
+  const s     = mapConv.Scale?.value ?? 1;
+  const ax    = mapConv.XAxisAbscissa?.value ?? 1;
+  const ay    = mapConv.XAxisOrdinate?.value ?? 0;
 
-  // console.log("eastings:", eastings, "; northings:", northings);
-
-  const xAxisX = mapConv.XAxisAbscissa?.value || 1;
-  const xAxisY = mapConv.XAxisOrdinate?.value || 0;
-  const scale = mapConv.Scale?.value || 1;
-
-  const xAxis = new THREE.Vector3(xAxisX, xAxisY, 0).normalize();
+  const xAxis = new THREE.Vector3(ax, ay, 0).normalize();
   const zAxis = new THREE.Vector3(0, 0, 1);
   const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis);
 
-  // Get unit scale
-  let unitScale = getUnitScale(ifcAPI, modelID);
-  // console.log("unitScale:", unitScale);
-  
-  const matrix = new THREE.Matrix4();
-  matrix.makeBasis(xAxis, yAxis, zAxis);
-  matrix.setPosition(new THREE.Vector3(eastings * unitScale, northings * unitScale, orthoHeight * unitScale));
-  
-  matrix.scale(new THREE.Vector3(scale, scale, scale));
-  // console.log("transfoMatrix:", matrix);
+  // Orientation → Scale (local→map) → Translation (in map units)
+  resMatrix.makeBasis(xAxis, yAxis, zAxis);
+  resMatrix.scale(new THREE.Vector3(s, s, s));
+  resMatrix.setPosition(new THREE.Vector3(east, north, height));
 
-  return matrix;
+  return resMatrix;
 }
+
 
 // Flips the Y and Z coordinates (because Y-up is default for THREE)
 // And apply any transformation from IfcMapConversion (from IFC4)
@@ -504,3 +506,8 @@ export function getGeoPackagePropertiesFromGeoJSON(geojson: GeoJSON.FeatureColle
 
   return tabProperties;
 }
+
+
+export * as THREE from "three";
+export * as WebIFC from "web-ifc";
+export { IfcThree } from './ifc2scene';
