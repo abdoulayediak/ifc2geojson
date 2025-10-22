@@ -190,34 +190,34 @@ export function getElemsWithGeom(ifcData) {
  */
 function getIfcMapConversionMatrix(ifcAPI, modelID) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d, _e, _f;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
+        const resMatrix = new THREE.Matrix4();
         const mapConvIds = yield ifcAPI.GetLineIDsWithType(modelID, WebIFC.IFCMAPCONVERSION);
-        // console.log("mapConvIds size:", mapConvIds.size());
-        if (mapConvIds.size() === 0)
-            return new THREE.Matrix4();
+        // Fallback: no IfcMapConversion → scale only from UnitsInContext (to meters)
+        if (mapConvIds.size() === 0) {
+            const s = getUnitScale(ifcAPI, modelID); // e.g. mm→0.001, dm→0.1, m→1
+            return resMatrix.makeScale(s, s, s);
+        }
+        // IfcMapConversion present → use ONLY its rotation/scale/translation (map units)
         const mapConv = yield ifcAPI.GetLine(modelID, mapConvIds.get(0));
-        // console.log("mapConv:", mapConv);
-        if (!mapConv)
-            return new THREE.Matrix4();
-        const eastings = ((_a = mapConv.Eastings) === null || _a === void 0 ? void 0 : _a.value) || 0;
-        const northings = ((_b = mapConv.Northings) === null || _b === void 0 ? void 0 : _b.value) || 0;
-        const orthoHeight = ((_c = mapConv.OrthogonalHeight) === null || _c === void 0 ? void 0 : _c.value) || 0;
-        // console.log("eastings:", eastings, "; northings:", northings);
-        const xAxisX = ((_d = mapConv.XAxisAbscissa) === null || _d === void 0 ? void 0 : _d.value) || 1;
-        const xAxisY = ((_e = mapConv.XAxisOrdinate) === null || _e === void 0 ? void 0 : _e.value) || 0;
-        const scale = ((_f = mapConv.Scale) === null || _f === void 0 ? void 0 : _f.value) || 1;
-        const xAxis = new THREE.Vector3(xAxisX, xAxisY, 0).normalize();
+        if (!mapConv) {
+            const s = getUnitScale(ifcAPI, modelID);
+            return resMatrix.makeScale(s, s, s);
+        }
+        const east = (_b = (_a = mapConv.Eastings) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : 0;
+        const north = (_d = (_c = mapConv.Northings) === null || _c === void 0 ? void 0 : _c.value) !== null && _d !== void 0 ? _d : 0;
+        const height = (_f = (_e = mapConv.OrthogonalHeight) === null || _e === void 0 ? void 0 : _e.value) !== null && _f !== void 0 ? _f : 0;
+        const s = (_h = (_g = mapConv.Scale) === null || _g === void 0 ? void 0 : _g.value) !== null && _h !== void 0 ? _h : 1;
+        const ax = (_k = (_j = mapConv.XAxisAbscissa) === null || _j === void 0 ? void 0 : _j.value) !== null && _k !== void 0 ? _k : 1;
+        const ay = (_m = (_l = mapConv.XAxisOrdinate) === null || _l === void 0 ? void 0 : _l.value) !== null && _m !== void 0 ? _m : 0;
+        const xAxis = new THREE.Vector3(ax, ay, 0).normalize();
         const zAxis = new THREE.Vector3(0, 0, 1);
         const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis);
-        // Get unit scale
-        let unitScale = getUnitScale(ifcAPI, modelID);
-        // console.log("unitScale:", unitScale);
-        const matrix = new THREE.Matrix4();
-        matrix.makeBasis(xAxis, yAxis, zAxis);
-        matrix.setPosition(new THREE.Vector3(eastings * unitScale, northings * unitScale, orthoHeight * unitScale));
-        matrix.scale(new THREE.Vector3(scale, scale, scale));
-        // console.log("transfoMatrix:", matrix);
-        return matrix;
+        // Orientation → Scale (local→map) → Translation (in map units)
+        resMatrix.makeBasis(xAxis, yAxis, zAxis);
+        resMatrix.scale(new THREE.Vector3(s, s, s));
+        resMatrix.setPosition(new THREE.Vector3(east, north, height));
+        return resMatrix;
     });
 }
 // Flips the Y and Z coordinates (because Y-up is default for THREE)
@@ -408,3 +408,6 @@ export function getGeoPackagePropertiesFromGeoJSON(geojson) {
     }));
     return tabProperties;
 }
+export * as THREE from "three";
+export * as WebIFC from "web-ifc";
+export { IfcThree } from './ifc2scene';

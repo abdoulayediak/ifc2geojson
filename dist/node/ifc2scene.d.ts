@@ -12,6 +12,13 @@ export declare class IfcThree {
      * @modelID Model handle retrieved by OpenModel, model must not be closed
     */
     LoadAllGeometry(scene: THREE.Scene, modelID: number, toFilter?: string[]): void;
+    /**
+     * Loads all geometry for the model with id "modelID" into the supplied scene
+     * @scene Threejs Scene object
+     * @modelID Model handle retrieved by OpenModel, model must not be closed
+    */
+    LoadSelectedGeometry(scene: THREE.Scene, modelID: number, selectedIDs?: number[]): void;
+    private processMeshGeom;
     private getFilteredIfcTypes;
     private extractStringProperties;
     private getPlacedGeometry;

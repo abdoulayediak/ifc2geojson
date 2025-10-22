@@ -60,3 +60,6 @@ export declare function getGeoPackagePropertiesFromGeoJSON(geojson: GeoJSON.Feat
     name: string;
     dataType: string;
 }[];
+export * as THREE from "three";
+export * as WebIFC from "web-ifc";
+export { IfcThree } from './ifc2scene';
