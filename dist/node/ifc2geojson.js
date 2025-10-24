@@ -128,6 +128,7 @@ const LENGTH_UNITS = {
 /**
  * Computes the conversion factor for length units defined in the IFC model.
  * Defaults to 1 (meter) if no unit or unknown unit is found.
+ * * =====> Unused because web-ifc is applying metric scaling by default <=====
  */
 function getUnitScale(ifcAPI, modelID) {
     var _a, _b, _c, _d, _e;
@@ -190,26 +191,24 @@ export function getElemsWithGeom(ifcData) {
  */
 function getIfcMapConversionMatrix(ifcAPI, modelID) {
     return __awaiter(this, void 0, void 0, function* () {
-        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k, _l, _m;
+        var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
         const resMatrix = new THREE.Matrix4();
-        const mapConvIds = yield ifcAPI.GetLineIDsWithType(modelID, WebIFC.IFCMAPCONVERSION);
+        const mapConvIds = ifcAPI.GetLineIDsWithType(modelID, WebIFC.IFCMAPCONVERSION);
         // Fallback: no IfcMapConversion → scale only from UnitsInContext (to meters)
-        if (mapConvIds.size() === 0) {
-            const s = getUnitScale(ifcAPI, modelID); // e.g. mm→0.001, dm→0.1, m→1
-            return resMatrix.makeScale(s, s, s);
-        }
+        if (mapConvIds.size() === 0)
+            return resMatrix;
         // IfcMapConversion present → use ONLY its rotation/scale/translation (map units)
         const mapConv = yield ifcAPI.GetLine(modelID, mapConvIds.get(0));
-        if (!mapConv) {
-            const s = getUnitScale(ifcAPI, modelID);
-            return resMatrix.makeScale(s, s, s);
-        }
+        if (!mapConv)
+            return resMatrix;
         const east = (_b = (_a = mapConv.Eastings) === null || _a === void 0 ? void 0 : _a.value) !== null && _b !== void 0 ? _b : 0;
         const north = (_d = (_c = mapConv.Northings) === null || _c === void 0 ? void 0 : _c.value) !== null && _d !== void 0 ? _d : 0;
         const height = (_f = (_e = mapConv.OrthogonalHeight) === null || _e === void 0 ? void 0 : _e.value) !== null && _f !== void 0 ? _f : 0;
-        const s = (_h = (_g = mapConv.Scale) === null || _g === void 0 ? void 0 : _g.value) !== null && _h !== void 0 ? _h : 1;
-        const ax = (_k = (_j = mapConv.XAxisAbscissa) === null || _j === void 0 ? void 0 : _j.value) !== null && _k !== void 0 ? _k : 1;
-        const ay = (_m = (_l = mapConv.XAxisOrdinate) === null || _l === void 0 ? void 0 : _l.value) !== null && _m !== void 0 ? _m : 0;
+        // const s     = mapConv.Scale?.value ?? 1;
+        //web-ifc applies metric scaling by default (which can be a problem if mapConv.Scale conflicts with it...)
+        const s = 1;
+        const ax = (_h = (_g = mapConv.XAxisAbscissa) === null || _g === void 0 ? void 0 : _g.value) !== null && _h !== void 0 ? _h : 1;
+        const ay = (_k = (_j = mapConv.XAxisOrdinate) === null || _j === void 0 ? void 0 : _j.value) !== null && _k !== void 0 ? _k : 0;
         const xAxis = new THREE.Vector3(ax, ay, 0).normalize();
         const zAxis = new THREE.Vector3(0, 0, 1);
         const yAxis = new THREE.Vector3().crossVectors(zAxis, xAxis);

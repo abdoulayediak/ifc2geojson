@@ -145,6 +145,7 @@ const LENGTH_UNITS: Record<string, number> = {
 /**
  * Computes the conversion factor for length units defined in the IFC model.
  * Defaults to 1 (meter) if no unit or unknown unit is found.
+ * * =====> Unused because web-ifc is applying metric scaling by default <=====
  */
 function getUnitScale(ifcAPI: WebIFC.IfcAPI, modelID: number): number {
   try {
@@ -221,25 +222,23 @@ async function getIfcMapConversionMatrix(
   modelID: number
 ): Promise<THREE.Matrix4> {
   const resMatrix = new THREE.Matrix4();
-  const mapConvIds = await ifcAPI.GetLineIDsWithType(modelID, WebIFC.IFCMAPCONVERSION);
+  const mapConvIds = ifcAPI.GetLineIDsWithType(modelID, WebIFC.IFCMAPCONVERSION);
 
   // Fallback: no IfcMapConversion → scale only from UnitsInContext (to meters)
-  if (mapConvIds.size() === 0) {
-    const s = getUnitScale(ifcAPI, modelID); // e.g. mm→0.001, dm→0.1, m→1
-    return resMatrix.makeScale(s, s, s);
-  }
-
+  if (mapConvIds.size() === 0) return resMatrix;
+  
   // IfcMapConversion present → use ONLY its rotation/scale/translation (map units)
   const mapConv = await ifcAPI.GetLine(modelID, mapConvIds.get(0));
-  if (!mapConv) {
-    const s = getUnitScale(ifcAPI, modelID);
-    return resMatrix.makeScale(s, s, s);
-  }
+  if (!mapConv) return resMatrix;
 
   const east  = mapConv.Eastings?.value ?? 0;
   const north = mapConv.Northings?.value ?? 0;
   const height= mapConv.OrthogonalHeight?.value ?? 0;
-  const s     = mapConv.Scale?.value ?? 1;
+  
+  // const s     = mapConv.Scale?.value ?? 1;
+  //web-ifc applies metric scaling by default (which can be a problem if mapConv.Scale conflicts with it...)
+  const s     = 1;
+  
   const ax    = mapConv.XAxisAbscissa?.value ?? 1;
   const ay    = mapConv.XAxisOrdinate?.value ?? 0;
 
