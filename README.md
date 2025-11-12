@@ -187,6 +187,8 @@ Analyzes a GeoJSON `FeatureCollection` and outputs property names and GeoPackage
 - [`three-geojson-exporter`](https://github.com/prolincur/three-geojson-exporter) — inspiration for exporter
 - [`geopackage-js`](https://github.com/ngageoint/geopackage-js) — for GeoJSON → GeoPackage schema
 
+This project has received funding from the European Union’s Horizon Europe programme under Grant Agreement No.101058559 (CHEK: Change toolkit for digital building permit).
+
 ---
 
 ## License
