@@ -12,7 +12,7 @@ import { IfcThree } from './ifc2scene';
 
 
 // Adapted from https://github.com/prolincur/three-geojson-exporter for 3D support
-class GeoJsonExporter {
+export class geoJsonExporter {
   projection: string;
   precision: number;
   georefOffset: THREE.Vector3; //to limit precision loss when handling big coordinates
@@ -213,11 +213,46 @@ export async function getElemsWithGeom(
 
 
 
+export async function getElemsWithGeomFromModelID(
+  ifcAPI: WebIFC.IfcAPI, 
+  modelID: number
+): Promise<string[]> {
+
+  const elemsWithGeom: string[] = [];
+
+  // Get all types available in the model
+  const allTypes: WebIFC.IfcType[] = ifcAPI.GetAllTypesOfModel(modelID);
+
+  for (let i = 0; i < allTypes.length; i++) {
+    const type = allTypes[i];
+
+    // Only consider IFC elements that can have geometry
+    if (ifcAPI.IsIfcElement(type.typeID)) {
+      // Get all items of this type
+      const items = ifcAPI.GetLineIDsWithType(modelID, type.typeID);
+
+      for (let j = 0; j < items.size(); j++) {
+        const lineID = items.get(j);
+        const line = ifcAPI.GetLine(modelID, lineID);
+
+        if (line.Representation) {
+          elemsWithGeom.push(type.typeName);
+          break;
+        }
+      }
+    }
+  }
+
+  return elemsWithGeom;
+}
+
+
+
 /**
  * Computes a transformation matrix from the IFC IfcMapConversion entity,
  * incorporating translation, orientation, scaling, and unit conversion.
  */
-async function getIfcMapConversionMatrix(
+export async function getIfcMapConversionMatrix(
   ifcAPI: WebIFC.IfcAPI,
   modelID: number
 ): Promise<THREE.Matrix4> {
@@ -259,7 +294,7 @@ async function getIfcMapConversionMatrix(
 // And apply any transformation from IfcMapConversion (from IFC4)
 // While trying to preserve the coordinate precision as much as possible
 // by using Float64Array and applying transformation at export with georefOffset
-async function transformScene(
+export async function transformScene(
   ifcAPI: any,
   modelID: number,
   scene: THREE.Scene
@@ -346,7 +381,7 @@ export async function ifc2Geojson(
   const { scene, georefOffset } = await transformScene(ifcAPI, modelID, localScene );
 
   msgCallback("Converting to GeoJSON...");
-  const exporter = new GeoJsonExporter().setGeorefOffset(georefOffset);
+  const exporter = new geoJsonExporter().setGeorefOffset(georefOffset);
   const geojson = exporter.parse(scene);
 
   const geojsonWithCRS = {
@@ -360,6 +395,40 @@ export async function ifc2Geojson(
   } as any;
 
   ifcAPI.CloseModel(modelID);
+  return geojsonWithCRS;
+}
+
+
+// Version assuming an already loaded model and available modelID
+export async function ifc2GeojsonFromModelID(
+  ifcAPI: WebIFC.IfcAPI, 
+  modelID: number,
+  crs: string = "urn:ogc:def:crs:EPSG::3857",
+  msgCallback: (msg: string) => void = () => { }
+): Promise<object> {
+
+  msgCallback("Loading geometries...");
+  const localScene  = new THREE.Scene();
+  const model = new IfcThree(ifcAPI);
+  model.LoadAllGeometry(localScene , modelID);
+
+  // Return both the transformed scene + georef offset
+  const { scene, georefOffset } = await transformScene(ifcAPI, modelID, localScene );
+
+  msgCallback("Converting to GeoJSON...");
+  const exporter = new geoJsonExporter().setGeorefOffset(georefOffset);
+  const geojson = exporter.parse(scene);
+
+  const geojsonWithCRS = {
+    ...geojson,
+    crs: {
+      type: "name",
+      properties: {
+        name: crs
+      }
+    }
+  } as any;
+
   return geojsonWithCRS;
 }
 
@@ -397,7 +466,7 @@ export async function ifc2GeojsonWithFilter(
   const { scene, georefOffset } = await transformScene(ifcAPI, modelID, localScene );
 
   msgCallback("Converting to GeoJSON...");
-  const exporter = new GeoJsonExporter().setGeorefOffset(georefOffset);
+  const exporter = new geoJsonExporter().setGeorefOffset(georefOffset);
   const geojson = exporter.parse(scene);
 
   const geojsonWithCRS = {
@@ -411,6 +480,40 @@ export async function ifc2GeojsonWithFilter(
   } as any;
 
   ifcAPI.CloseModel(modelID);
+  return geojsonWithCRS;
+}
+
+
+export async function ifc2GeojsonWithFilterFromModelID(
+  ifcAPI: WebIFC.IfcAPI, 
+  modelID: number,
+  crs: string = "urn:ogc:def:crs:EPSG::3857",
+  toFilter: string[] = [],
+  msgCallback: (msg: string) => void = () => { }
+): Promise<object> {
+
+  msgCallback("Loading geometries...");
+  const localScene  = new THREE.Scene();
+  const model = new IfcThree(ifcAPI);
+  model.LoadAllGeometry(localScene , modelID, toFilter);
+
+  // Return both the transformed scene + georef offset
+  const { scene, georefOffset } = await transformScene(ifcAPI, modelID, localScene );
+
+  msgCallback("Converting to GeoJSON...");
+  const exporter = new geoJsonExporter().setGeorefOffset(georefOffset);
+  const geojson = exporter.parse(scene);
+
+  const geojsonWithCRS = {
+    ...geojson,
+    crs: {
+      type: "name",
+      properties: {
+        name: crs
+      }
+    }
+  } as any;
+
   return geojsonWithCRS;
 }
 
@@ -439,6 +542,21 @@ export async function ifc2GeojsonBlob(
   return blob;
 }
 
+export async function ifc2GeojsonBlobFromModelID(
+  ifcAPI: WebIFC.IfcAPI, 
+  modelID: number,
+  crs: string = "urn:ogc:def:crs:EPSG::3857",
+  msgCallback: (msg: string) => void = () => { }
+): Promise<Blob> {
+
+  const geojsonWithCRS = await ifc2GeojsonFromModelID(ifcAPI, modelID, crs, msgCallback);
+  const blob = new Blob([JSON.stringify(geojsonWithCRS)], {
+    type: "application/json"
+  });
+
+  return blob;
+}
+
 
 /**
  * Like `ifc2GeojsonWithFilter`, but returns the result as a Blob.
@@ -460,6 +578,23 @@ export async function ifc2GeojsonBlobWithFilter(
 ): Promise<Blob> {
 
   const geojsonWithCRS = await ifc2GeojsonWithFilter(ifcData, crs, toFilter, msgCallback);
+  const blob = new Blob([JSON.stringify(geojsonWithCRS)], {
+    type: "application/json"
+  });
+
+  return blob;
+}
+
+
+export async function ifc2GeojsonBlobWithFilterFromModelID(
+  ifcAPI: WebIFC.IfcAPI, 
+  modelID: number,
+  crs: string = "urn:ogc:def:crs:EPSG::3857",
+  toFilter: string[] = [],
+  msgCallback: (msg: string) => void = () => { }
+): Promise<Blob> {
+
+  const geojsonWithCRS = await ifc2GeojsonWithFilterFromModelID(ifcAPI, modelID, crs, toFilter, msgCallback);
   const blob = new Blob([JSON.stringify(geojsonWithCRS)], {
     type: "application/json"
   });
