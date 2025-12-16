@@ -18,7 +18,7 @@ import * as WebIFC from "web-ifc";
 import * as THREE from "three";
 import { IfcThree } from './ifc2scene';
 // Adapted from https://github.com/prolincur/three-geojson-exporter for 3D support
-class GeoJsonExporter {
+export class geoJsonExporter {
     constructor() {
         this.projection = "EPSG:3857";
         this.precision = 8;
@@ -185,11 +185,35 @@ export function getElemsWithGeom(ifcData) {
         return elemsWithGeom;
     });
 }
+export function getElemsWithGeomFromModelID(ifcAPI, modelID) {
+    return __awaiter(this, void 0, void 0, function* () {
+        const elemsWithGeom = [];
+        // Get all types available in the model
+        const allTypes = ifcAPI.GetAllTypesOfModel(modelID);
+        for (let i = 0; i < allTypes.length; i++) {
+            const type = allTypes[i];
+            // Only consider IFC elements that can have geometry
+            if (ifcAPI.IsIfcElement(type.typeID)) {
+                // Get all items of this type
+                const items = ifcAPI.GetLineIDsWithType(modelID, type.typeID);
+                for (let j = 0; j < items.size(); j++) {
+                    const lineID = items.get(j);
+                    const line = ifcAPI.GetLine(modelID, lineID);
+                    if (line.Representation) {
+                        elemsWithGeom.push(type.typeName);
+                        break;
+                    }
+                }
+            }
+        }
+        return elemsWithGeom;
+    });
+}
 /**
  * Computes a transformation matrix from the IFC IfcMapConversion entity,
  * incorporating translation, orientation, scaling, and unit conversion.
  */
-function getIfcMapConversionMatrix(ifcAPI, modelID) {
+export function getIfcMapConversionMatrix(ifcAPI, modelID) {
     return __awaiter(this, void 0, void 0, function* () {
         var _a, _b, _c, _d, _e, _f, _g, _h, _j, _k;
         const resMatrix = new THREE.Matrix4();
@@ -223,7 +247,7 @@ function getIfcMapConversionMatrix(ifcAPI, modelID) {
 // And apply any transformation from IfcMapConversion (from IFC4)
 // While trying to preserve the coordinate precision as much as possible
 // by using Float64Array and applying transformation at export with georefOffset
-function transformScene(ifcAPI, modelID, scene) {
+export function transformScene(ifcAPI, modelID, scene) {
     return __awaiter(this, void 0, void 0, function* () {
         // Step 1: build map conversion matrix (from IFC georef info)
         const mapMatrix = yield getIfcMapConversionMatrix(ifcAPI, modelID);
@@ -286,7 +310,7 @@ export function ifc2Geojson(ifcData_1) {
         // Return both the transformed scene + georef offset
         const { scene, georefOffset } = yield transformScene(ifcAPI, modelID, localScene);
         msgCallback("Converting to GeoJSON...");
-        const exporter = new GeoJsonExporter().setGeorefOffset(georefOffset);
+        const exporter = new geoJsonExporter().setGeorefOffset(georefOffset);
         const geojson = exporter.parse(scene);
         const geojsonWithCRS = Object.assign(Object.assign({}, geojson), { crs: {
                 type: "name",
@@ -295,6 +319,27 @@ export function ifc2Geojson(ifcData_1) {
                 }
             } });
         ifcAPI.CloseModel(modelID);
+        return geojsonWithCRS;
+    });
+}
+// Version assuming an already loaded model and available modelID
+export function ifc2GeojsonFromModelID(ifcAPI_1, modelID_1) {
+    return __awaiter(this, arguments, void 0, function* (ifcAPI, modelID, crs = "urn:ogc:def:crs:EPSG::3857", msgCallback = () => { }) {
+        msgCallback("Loading geometries...");
+        const localScene = new THREE.Scene();
+        const model = new IfcThree(ifcAPI);
+        model.LoadAllGeometry(localScene, modelID);
+        // Return both the transformed scene + georef offset
+        const { scene, georefOffset } = yield transformScene(ifcAPI, modelID, localScene);
+        msgCallback("Converting to GeoJSON...");
+        const exporter = new geoJsonExporter().setGeorefOffset(georefOffset);
+        const geojson = exporter.parse(scene);
+        const geojsonWithCRS = Object.assign(Object.assign({}, geojson), { crs: {
+                type: "name",
+                properties: {
+                    name: crs
+                }
+            } });
         return geojsonWithCRS;
     });
 }
@@ -323,7 +368,7 @@ export function ifc2GeojsonWithFilter(ifcData_1) {
         // Return both the transformed scene + georef offset
         const { scene, georefOffset } = yield transformScene(ifcAPI, modelID, localScene);
         msgCallback("Converting to GeoJSON...");
-        const exporter = new GeoJsonExporter().setGeorefOffset(georefOffset);
+        const exporter = new geoJsonExporter().setGeorefOffset(georefOffset);
         const geojson = exporter.parse(scene);
         const geojsonWithCRS = Object.assign(Object.assign({}, geojson), { crs: {
                 type: "name",
@@ -332,6 +377,26 @@ export function ifc2GeojsonWithFilter(ifcData_1) {
                 }
             } });
         ifcAPI.CloseModel(modelID);
+        return geojsonWithCRS;
+    });
+}
+export function ifc2GeojsonWithFilterFromModelID(ifcAPI_1, modelID_1) {
+    return __awaiter(this, arguments, void 0, function* (ifcAPI, modelID, crs = "urn:ogc:def:crs:EPSG::3857", toFilter = [], msgCallback = () => { }) {
+        msgCallback("Loading geometries...");
+        const localScene = new THREE.Scene();
+        const model = new IfcThree(ifcAPI);
+        model.LoadAllGeometry(localScene, modelID, toFilter);
+        // Return both the transformed scene + georef offset
+        const { scene, georefOffset } = yield transformScene(ifcAPI, modelID, localScene);
+        msgCallback("Converting to GeoJSON...");
+        const exporter = new geoJsonExporter().setGeorefOffset(georefOffset);
+        const geojson = exporter.parse(scene);
+        const geojsonWithCRS = Object.assign(Object.assign({}, geojson), { crs: {
+                type: "name",
+                properties: {
+                    name: crs
+                }
+            } });
         return geojsonWithCRS;
     });
 }
@@ -354,6 +419,15 @@ export function ifc2GeojsonBlob(ifcData_1) {
         return blob;
     });
 }
+export function ifc2GeojsonBlobFromModelID(ifcAPI_1, modelID_1) {
+    return __awaiter(this, arguments, void 0, function* (ifcAPI, modelID, crs = "urn:ogc:def:crs:EPSG::3857", msgCallback = () => { }) {
+        const geojsonWithCRS = yield ifc2GeojsonFromModelID(ifcAPI, modelID, crs, msgCallback);
+        const blob = new Blob([JSON.stringify(geojsonWithCRS)], {
+            type: "application/json"
+        });
+        return blob;
+    });
+}
 /**
  * Like `ifc2GeojsonWithFilter`, but returns the result as a Blob.
  * Useful when you want to filter certain IFC classes and export
@@ -369,6 +443,15 @@ export function ifc2GeojsonBlob(ifcData_1) {
 export function ifc2GeojsonBlobWithFilter(ifcData_1) {
     return __awaiter(this, arguments, void 0, function* (ifcData, crs = "urn:ogc:def:crs:EPSG::3857", toFilter = [], msgCallback = () => { }) {
         const geojsonWithCRS = yield ifc2GeojsonWithFilter(ifcData, crs, toFilter, msgCallback);
+        const blob = new Blob([JSON.stringify(geojsonWithCRS)], {
+            type: "application/json"
+        });
+        return blob;
+    });
+}
+export function ifc2GeojsonBlobWithFilterFromModelID(ifcAPI_1, modelID_1) {
+    return __awaiter(this, arguments, void 0, function* (ifcAPI, modelID, crs = "urn:ogc:def:crs:EPSG::3857", toFilter = [], msgCallback = () => { }) {
+        const geojsonWithCRS = yield ifc2GeojsonWithFilterFromModelID(ifcAPI, modelID, crs, toFilter, msgCallback);
         const blob = new Blob([JSON.stringify(geojsonWithCRS)], {
             type: "application/json"
         });
